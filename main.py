@@ -1,6 +1,6 @@
 """
 Entry point for the Business Magic Swarm.  This script exposes a
-collection of small agents through a simple command‑line interface.
+collection of small agents through a simple command-line interface.
 
 Usage examples::
 
@@ -20,6 +20,12 @@ from typing import Callable, Dict, List
 from agents.marketing_agent import generate_marketing_copy
 from agents.sales_agent import generate_sales_email
 from agents.website_agent import build_website
+# Try to import the AI-powered marketing agent.  If it fails, we'll add
+# a placeholder later.
+try:
+    from agents.ai_marketing_agent import generate_marketing_copy as generate_ai_marketing_copy  # type: ignore
+except Exception:
+    generate_ai_marketing_copy = None  # type: ignore
 
 
 # Map command names to agent callables and required arguments
@@ -27,11 +33,14 @@ AGENT_MAP: Dict[str, Callable[..., str]] = {
     "marketing_copy": generate_marketing_copy,
     "sales_email": generate_sales_email,
     "build_website": build_website,
+    # AI-powered marketing copy using an open-source transformer model.  This
+    # entry will be ignored if the import failed above.
+    "ai_marketing_copy": generate_ai_marketing_copy,
 }
 
 
 def parse_features(features: str) -> List[str]:
-    """Split a comma‑separated string into a list, stripping whitespace."""
+    """Split a comma-separated string into a list, stripping whitespace."""
     return [f.strip() for f in features.split(",") if f.strip()]
 
 
@@ -41,7 +50,9 @@ def main() -> None:
         "--task",
         choices=list(AGENT_MAP.keys()),
         required=True,
-        help="The task to run (marketing_copy, sales_email, build_website)",
+        help=(
+            "The task to run (marketing_copy, ai_marketing_copy, sales_email, build_website)"
+        ),
     )
     parser.add_argument(
         "--product",
@@ -53,7 +64,7 @@ def main() -> None:
         "--features",
         type=str,
         default="",
-        help="Comma‑separated list of product features (used by marketing and website tasks)",
+        help="Comma-separated list of product features (used by marketing and website tasks)",
     )
     parser.add_argument(
         "--audience",
@@ -65,6 +76,12 @@ def main() -> None:
 
     # Dispatch to the selected agent
     func = AGENT_MAP[args.task]
+    # If the function is ``None`` (e.g. missing optional dependency),
+    # produce a user-friendly error.
+    if func is None:
+        parser.error(
+            f"The selected task '{args.task}' is not available because the required dependencies are missing."
+        )
     if args.task == "marketing_copy":
         if not args.features:
             parser.error("--features is required for marketing_copy task")
@@ -73,6 +90,11 @@ def main() -> None:
     elif args.task == "sales_email":
         audience = args.audience or "Customer"
         result = func(args.product, audience)
+        print(result)
+    elif args.task == "ai_marketing_copy":
+        if not args.features:
+            parser.error("--features is required for ai_marketing_copy task")
+        result = func(args.product, parse_features(args.features))
         print(result)
     elif args.task == "build_website":
         if not args.features:
